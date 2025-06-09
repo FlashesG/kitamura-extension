@@ -322,47 +322,63 @@
 // 5. 外部API読み込み
 const apiType = urlParams.get('api');
 const dataId = urlParams.get('gistId') || urlParams.get('binId');
+const status = urlParams.get('status');
 
-if (apiType && dataId) {
+if (apiType) {
   const mainStatusDiv = document.getElementById('mainStatus');
-  mainStatusDiv.innerHTML = '<span class="spinner"></span>外部APIからデータを読み込み中...';
   
-  document.getElementById('externalAPIStatus').className = 'method-status pending';
-  document.getElementById('externalAPIStatus').textContent = '読み込み中...';
-  
-  let apiUrl;
-  if (apiType === 'gist') {
-    apiUrl = `https://api.github.com/gists/${dataId}`;
-  } else if (apiType === 'jsonbin') {
-    apiUrl = `https://api.jsonbin.io/v3/b/${dataId}`;
-  } else if (apiType === 'httpbin') {
-    // httpbinの場合はデータ表示のみ
-    displayReceivedData({ message: 'httpbin.org POSTテスト成功', status: 'success' }, 'externalAPI');
+  if (apiType === 'httpbin' && status === 'success') {
+    // httpbinテスト成功の場合
+    document.getElementById('externalAPIStatus').className = 'method-status success';
+    document.getElementById('externalAPIStatus').textContent = '受信成功';
+    document.getElementById('externalAPIData').textContent = `${new Date().toLocaleTimeString()} に受信`;
+    
+    const testData = {
+      message: 'httpbin.org POSTテスト成功',
+      status: 'external API communication verified',
+      timestamp: new Date().toISOString()
+    };
+    
+    displayReceivedData(testData, 'externalAPI');
     return;
   }
   
-  if (apiUrl) {
-    fetch(apiUrl)
-      .then(response => response.json())
-      .then(result => {
-        let data;
-        if (apiType === 'gist') {
-          const fileContent = Object.values(result.files)[0]?.content;
-          data = fileContent ? JSON.parse(fileContent) : result;
-        } else {
-          data = result.record || result;
-        }
-        
-        displayReceivedData(data, 'externalAPI');
-      })
-      .catch(error => {
-        console.error('外部API読み込みエラー:', error);
-        mainStatusDiv.className = 'status error';
-        mainStatusDiv.innerHTML = `❌ 外部APIからの読み込みに失敗: ${error.message}`;
-        
-        document.getElementById('externalAPIStatus').className = 'method-status failed';
-        document.getElementById('externalAPIStatus').textContent = 'エラー';
-      });
+  if (dataId) {
+    mainStatusDiv.innerHTML = '<span class="spinner"></span>外部APIからデータを読み込み中...';
+    
+    document.getElementById('externalAPIStatus').className = 'method-status pending';
+    document.getElementById('externalAPIStatus').textContent = '読み込み中...';
+    
+    let apiUrl;
+    if (apiType === 'gist') {
+      apiUrl = `https://api.github.com/gists/${dataId}`;
+    } else if (apiType === 'jsonbin') {
+      apiUrl = `https://api.jsonbin.io/v3/b/${dataId}`;
+    }
+    
+    if (apiUrl) {
+      fetch(apiUrl)
+        .then(response => response.json())
+        .then(result => {
+          let data;
+          if (apiType === 'gist') {
+            const fileContent = Object.values(result.files)[0]?.content;
+            data = fileContent ? JSON.parse(fileContent) : result;
+          } else {
+            data = result.record || result;
+          }
+          
+          displayReceivedData(data, 'externalAPI');
+        })
+        .catch(error => {
+          console.error('外部API読み込みエラー:', error);
+          mainStatusDiv.className = 'status error';
+          mainStatusDiv.innerHTML = `❌ 外部APIからの読み込みに失敗: ${error.message}`;
+          
+          document.getElementById('externalAPIStatus').className = 'method-status failed';
+          document.getElementById('externalAPIStatus').textContent = 'エラー';
+        });
+    }
   }
 }
 
