@@ -304,24 +304,29 @@
   </div>
 
   <script>
-    // URLパラメータから商品データを取得
-    function getProductsFromURL() {
-      const urlParams = new URLSearchParams(window.location.search);
-      const productsParam = urlParams.get('products');
-      const action = urlParams.get('action');
-      
-      if (!productsParam) {
-        return { products: [], action: 'select' };
-      }
-      
-      try {
-        const products = JSON.parse(decodeURIComponent(productsParam));
+// URLパラメータとLocalStorageから商品データを取得
+function getProductsFromURL() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const dataKey = urlParams.get('data');
+  const action = urlParams.get('action');
+  
+  // LocalStorageからデータを取得
+  if (dataKey) {
+    try {
+      const storedData = localStorage.getItem(dataKey);
+      if (storedData) {
+        const products = JSON.parse(storedData);
+        // 使用後にLocalStorageから削除
+        localStorage.removeItem(dataKey);
         return { products, action: action || 'select' };
-      } catch (error) {
-        console.error('商品データの解析エラー:', error);
-        return { products: [], action: 'select' };
       }
+    } catch (error) {
+      console.error('LocalStorageからのデータ取得エラー:', error);
     }
+  }
+  
+  return { products: [], action: action || 'select' };
+}
 
     // 商品選択ページの表示
     function displayProductSelection(products) {
