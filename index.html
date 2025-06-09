@@ -72,6 +72,17 @@
       color: #c62828;
     }
 
+    .page-info {
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 20px;
+      text-align: center;
+      font-size: 14px;
+      color: #666;
+    }
+
     .products {
       display: none;
     }
@@ -132,6 +143,12 @@
     .product-condition.AB { background: #fff3e0; color: #f57c00; }
     .product-condition.B { background: #fce4ec; color: #c2185b; }
     .product-condition.C { background: #f3e5f5; color: #7b1fa2; }
+
+    .product-target {
+      font-size: 12px;
+      color: #888;
+      margin-top: 8px;
+    }
 
     .selected-indicator {
       position: absolute;
@@ -229,6 +246,10 @@
     }
 
     @media (max-width: 600px) {
+      .content {
+        padding: 20px;
+      }
+      
       .product-details {
         flex-direction: column;
         align-items: flex-start;
@@ -258,6 +279,17 @@
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
+
+    .debug-info {
+      background: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 6px;
+      padding: 10px;
+      margin-top: 20px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      color: #666;
+    }
   </style>
 </head>
 <body>
@@ -272,6 +304,8 @@
         <div class="spinner"></div>
         商品情報を読み込んでいます...
       </div>
+      
+      <div id="pageInfo" class="page-info" style="display: none;"></div>
       
       <div id="products" class="products">
         <!-- 商品リストがここに動的に表示されます -->
@@ -300,39 +334,78 @@
           </button>
         </div>
       </div>
+      
+      <div id="debugInfo" class="debug-info" style="display: none;"></div>
     </div>
   </div>
 
   <script>
-// URLパラメータとLocalStorageから商品データを取得
-function getProductsFromURL() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const dataKey = urlParams.get('data');
-  const action = urlParams.get('action');
-  
-  // LocalStorageからデータを取得
-  if (dataKey) {
-    try {
-      const storedData = localStorage.getItem(dataKey);
-      if (storedData) {
-        const products = JSON.parse(storedData);
-        // 使用後にLocalStorageから削除
-        localStorage.removeItem(dataKey);
-        return { products, action: action || 'select' };
+    // URLパラメータから商品データを取得
+    function getProductsFromURL() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const dataParam = urlParams.get('data');
+      const action = urlParams.get('action');
+      const isSplit = urlParams.get('split') === 'true';
+      
+      if (dataParam) {
+        try {
+          // Base64デコード
+          const jsonData = decodeURIComponent(escape(atob(dataParam)));
+          const compactData = JSON.parse(jsonData);
+          
+          // データを元の形式に復元
+          const products = compactData.map(item => ({
+            product: {
+              productName: item.n,
+              price: item.p,
+              condition: item.c,
+              detailUrl: item.u
+            },
+            target: {
+              productName: item.t || item.n
+            },
+            originalIndex: item.i,
+            // 分割情報
+            page: item.page,
+            totalPages: item.totalPages,
+            totalProducts: item.totalProducts
+          }));
+          
+          return { 
+            products, 
+            action: action || 'select',
+            isSplit,
+            pageInfo: products[0] || {}
+          };
+        } catch (error) {
+          console.error('データのデコードエラー:', error);
+          return handleDataLoadError();
+        }
       }
-    } catch (error) {
-      console.error('LocalStorageからのデータ取得エラー:', error);
+      
+      return { products: [], action: action || 'select', isSplit: false };
     }
-  }
-  
-  return { products: [], action: action || 'select' };
-}
+
+    // データ読み込みエラー時の処理
+    function handleDataLoadError() {
+      const statusDiv = document.getElementById('status');
+      statusDiv.className = 'status error';
+      statusDiv.innerHTML = '❌ 商品データの読み込みに失敗しました。再試行中...';
+      
+      // 3秒後にリトライ
+      setTimeout(() => {
+        location.reload();
+      }, 3000);
+      
+      return { products: [], action: 'select', isSplit: false };
+    }
 
     // 商品選択ページの表示
-    function displayProductSelection(products) {
+    function displayProductSelection(products, pageInfo = {}) {
       const statusDiv = document.getElementById('status');
       const productsDiv = document.getElementById('products');
       const actionsDiv = document.getElementById('actions');
+      const pageInfoDiv = document.getElementById('pageInfo');
       
       if (products.length === 0) {
         statusDiv.className = 'status error';
@@ -343,6 +416,15 @@ function getProductsFromURL() {
       statusDiv.className = 'status ready';
       statusDiv.innerHTML = `✅ ${products.length}件の商品が見つかりました`;
       
+      // ページ情報の表示（分割時）
+      if (pageInfo.totalPages && pageInfo.totalPages > 1) {
+        pageInfoDiv.style.display = 'block';
+        pageInfoDiv.innerHTML = `
+          📄 ページ ${pageInfo.page || 1} / ${pageInfo.totalPages} 
+          （全${pageInfo.totalProducts}件中 ${products.length}件を表示）
+        `;
+      }
+      
       // 商品リストの生成
       productsDiv.innerHTML = '';
       products.forEach((match, index) => {
@@ -350,18 +432,20 @@ function getProductsFromURL() {
         const productItem = document.createElement('div');
         productItem.className = 'product-item';
         productItem.dataset.index = index;
+        productItem.dataset.originalIndex = match.originalIndex || index;
         
         productItem.innerHTML = `
           <div class="selected-indicator">✓</div>
           <div class="product-name">${product.productName}</div>
           <div class="product-details">
-            <div class="product-price">${product.price ? `${product.price.toLocaleString()}円` : '価格不明'}</div>
+            <div class="product-price">${product.price ? `¥${product.price.toLocaleString()}` : '価格不明'}</div>
             <div class="product-condition ${product.condition}">${product.condition || '状態不明'}</div>
           </div>
+          <div class="product-target">ターゲット: ${match.target.productName}</div>
         `;
         
         // クリックイベント
-        productItem.addEventListener('click', () => selectProduct(index));
+        productItem.addEventListener('click', () => selectProduct(index, match));
         
         productsDiv.appendChild(productItem);
       });
@@ -386,10 +470,11 @@ function getProductsFromURL() {
     }
 
     let selectedProductIndex = null;
+    let selectedProductData = null;
     let productsData = [];
 
     // 商品選択
-    function selectProduct(index) {
+    function selectProduct(index, productData) {
       // 既存の選択を解除
       document.querySelectorAll('.product-item').forEach(item => {
         item.classList.remove('selected');
@@ -400,57 +485,74 @@ function getProductsFromURL() {
       if (selectedItem) {
         selectedItem.classList.add('selected');
         selectedProductIndex = index;
+        selectedProductData = productData;
         document.getElementById('confirmBtn').disabled = false;
       }
     }
 
     // Chrome拡張機能にメッセージを送信
     function sendMessageToExtension(message) {
-      // Chrome拡張機能との通信（postMessage方式）
+      const messageData = {
+        type: 'KITAMURA_PRODUCT_SELECTION',
+        timestamp: Date.now(),
+        ...message
+      };
+      
+      // 1. postMessage方式（メイン）
       if (window.opener) {
-        window.opener.postMessage({
-          type: 'KITAMURA_PRODUCT_SELECTION',
-          ...message
-        }, '*');
+        try {
+          window.opener.postMessage(messageData, '*');
+          console.log('window.opener へメッセージ送信:', messageData);
+        } catch (error) {
+          console.error('window.opener メッセージ送信エラー:', error);
+        }
       }
       
-      // 追加: Chrome拡張機能のcontent scriptに直接メッセージ送信を試行
+      // 2. 同一ウィンドウのcontent scriptに送信
       try {
-        window.postMessage({
-          type: 'KITAMURA_PRODUCT_SELECTION',
-          source: 'product-selector',
-          ...message
-        }, '*');
+        window.postMessage(messageData, '*');
+        console.log('同一ウィンドウへメッセージ送信:', messageData);
       } catch (error) {
-        console.log('直接メッセージ送信失敗:', error);
+        console.error('同一ウィンドウメッセージ送信エラー:', error);
       }
       
-      // 追加: LocalStorageを使った通信方式
+      // 3. LocalStorage方式（フォールバック）
       try {
-        const messageData = {
-          type: 'KITAMURA_PRODUCT_SELECTION',
-          timestamp: Date.now(),
-          ...message
-        };
         localStorage.setItem('kitamura_message', JSON.stringify(messageData));
         
-        // StorageEventを発火させるため、一度削除してから再設定
+        // StorageEventを発火させるため、少し遅延して削除
         setTimeout(() => {
           localStorage.removeItem('kitamura_message');
-        }, 1000);
+        }, 2000);
+        
+        console.log('LocalStorage フォールバック送信:', messageData);
       } catch (error) {
-        console.log('LocalStorage通信失敗:', error);
+        console.error('LocalStorage通信エラー:', error);
       }
+    }
+
+    // デバッグ情報の表示
+    function showDebugInfo() {
+      const debugDiv = document.getElementById('debugInfo');
+      const urlParams = new URLSearchParams(window.location.search);
+      
+      debugDiv.innerHTML = `
+        <strong>デバッグ情報:</strong><br>
+        URL: ${window.location.href}<br>
+        オリジン: ${window.location.origin}<br>
+        window.opener: ${window.opener ? 'あり' : 'なし'}<br>
+        データパラメータ: ${urlParams.get('data') ? '取得済み' : '未取得'}<br>
+        商品数: ${productsData.length}件
+      `;
+      debugDiv.style.display = 'block';
     }
 
     // イベントリスナー
     document.getElementById('confirmBtn').addEventListener('click', () => {
-      if (selectedProductIndex !== null) {
-        const selectedProduct = productsData[selectedProductIndex];
-        
+      if (selectedProductIndex !== null && selectedProductData) {
         sendMessageToExtension({
           action: 'productSelected',
-          selectedProduct: selectedProduct,
+          selectedProduct: selectedProductData,
           selectedIndex: selectedProductIndex
         });
         
@@ -464,7 +566,6 @@ function getProductsFromURL() {
           if (window.opener) {
             window.close();
           } else {
-            // ウィンドウを閉じられない場合は、メッセージを表示
             statusDiv.innerHTML = '✅ 完了！このページを閉じて、ブラウザで購入処理の続行を確認してください。';
           }
         }, 3000);
@@ -519,17 +620,31 @@ function getProductsFromURL() {
 
     // 初期化
     document.addEventListener('DOMContentLoaded', () => {
-      const { products, action } = getProductsFromURL();
+      const { products, action, pageInfo } = getProductsFromURL();
       productsData = products;
+      
+      // デバッグ情報表示（開発時のみ）
+      if (window.location.hostname === 'localhost' || window.location.search.includes('debug=true')) {
+        showDebugInfo();
+      }
       
       if (action === 'confirm') {
         // 注文確認モード
         displayOrderConfirmation();
       } else {
         // 商品選択モード
-        displayProductSelection(products);
+        if (products.length > 0) {
+          displayProductSelection(products, pageInfo);
+        } else {
+          const statusDiv = document.getElementById('status');
+          statusDiv.className = 'status error';
+          statusDiv.innerHTML = '❌ 商品データがありません。URLを確認してください。';
+          showDebugInfo(); // エラー時はデバッグ情報を表示
+        }
       }
     });
+
+    console.log('キタムラカメラ商品選択ページが読み込まれました');
   </script>
 </body>
 </html>
