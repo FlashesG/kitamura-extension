@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>キタムラカメラ - 商品選択</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #e50012, #cc0010);
+      color: white;
+      padding: 30px;
+      text-align: center;
+    }
+
+    .header h1 {
+      font-size: 2.2em;
+      margin-bottom: 10px;
+      font-weight: 700;
+    }
+
+    .header p {
+      font-size: 1.1em;
+      opacity: 0.9;
+    }
+
+    .content {
+      padding: 40px;
+    }
+
+    .status {
+      text-align: center;
+      margin-bottom: 30px;
+      padding: 20px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+
+    .status.loading {
+      background: #e3f2fd;
+      color: #1976d2;
+    }
+
+    .status.ready {
+      background: #e8f5e8;
+      color: #2e7d32;
+    }
+
+    .status.error {
+      background: #ffebee;
+      color: #c62828;
+    }
+
+    .products {
+      display: none;
+    }
+
+    .product-item {
+      border: 2px solid #e0e0e0;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      padding: 20px;
+      transition: all 0.3s ease;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .product-item:hover {
+      border-color: #e50012;
+      box-shadow: 0 8px 25px rgba(229, 0, 18, 0.1);
+      transform: translateY(-2px);
+    }
+
+    .product-item.selected {
+      border-color: #e50012;
+      background: linear-gradient(135deg, #fff5f5, #ffebee);
+      box-shadow: 0 8px 25px rgba(229, 0, 18, 0.2);
+    }
+
+    .product-name {
+      font-size: 1.3em;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 10px;
+    }
+
+    .product-details {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 15px;
+    }
+
+    .product-price {
+      font-size: 1.5em;
+      font-weight: 700;
+      color: #e50012;
+    }
+
+    .product-condition {
+      background: #f5f5f5;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-weight: 500;
+      color: #666;
+    }
+
+    .product-condition.AA { background: #e8f5e8; color: #2e7d32; }
+    .product-condition.A { background: #e3f2fd; color: #1976d2; }
+    .product-condition.AB { background: #fff3e0; color: #f57c00; }
+    .product-condition.B { background: #fce4ec; color: #c2185b; }
+    .product-condition.C { background: #f3e5f5; color: #7b1fa2; }
+
+    .selected-indicator {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      background: #e50012;
+      color: white;
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      opacity: 0;
+      transform: scale(0.5);
+      transition: all 0.3s ease;
+    }
+
+    .product-item.selected .selected-indicator {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .actions {
+      margin-top: 40px;
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+    }
+
+    .btn {
+      padding: 15px 40px;
+      border: none;
+      border-radius: 12px;
+      font-size: 1.1em;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-decoration: none;
+      display: inline-block;
+      text-align: center;
+      min-width: 160px;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #e50012, #cc0010);
+      color: white;
+      box-shadow: 0 4px 15px rgba(229, 0, 18, 0.3);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(229, 0, 18, 0.4);
+    }
+
+    .btn-secondary {
+      background: #f5f5f5;
+      color: #666;
+      border: 2px solid #e0e0e0;
+    }
+
+    .btn-secondary:hover {
+      background: #e0e0e0;
+      border-color: #ccc;
+    }
+
+    .order-confirmation {
+      display: none;
+      text-align: center;
+    }
+
+    .confirmation-message {
+      background: #e8f5e8;
+      border: 2px solid #4caf50;
+      border-radius: 12px;
+      padding: 30px;
+      margin-bottom: 30px;
+    }
+
+    .confirmation-message h3 {
+      color: #2e7d32;
+      font-size: 1.5em;
+      margin-bottom: 15px;
+    }
+
+    .confirmation-message p {
+      color: #666;
+      font-size: 1.1em;
+    }
+
+    @media (max-width: 600px) {
+      .product-details {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      
+      .actions {
+        flex-direction: column;
+      }
+      
+      .btn {
+        width: 100%;
+      }
+    }
+
+    .spinner {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #e50012;
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      animation: spin 1s linear infinite;
+      display: inline-block;
+      margin-right: 10px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🎯 商品選択</h1>
+      <p>条件に一致した商品から購入する商品を選択してください</p>
+    </div>
+    
+    <div class="content">
+      <div id="status" class="status loading">
+        <div class="spinner"></div>
+        商品情報を読み込んでいます...
+      </div>
+      
+      <div id="products" class="products">
+        <!-- 商品リストがここに動的に表示されます -->
+      </div>
+      
+      <div id="actions" class="actions" style="display: none;">
+        <button id="confirmBtn" class="btn btn-primary" disabled>
+          この商品で購入開始
+        </button>
+        <button id="cancelBtn" class="btn btn-secondary">
+          キャンセル
+        </button>
+      </div>
+      
+      <div id="orderConfirmation" class="order-confirmation">
+        <div class="confirmation-message">
+          <h3>✅ 注文確認</h3>
+          <p>選択された商品で購入処理を続行しますか？</p>
+        </div>
+        <div class="actions">
+          <button id="finalConfirmBtn" class="btn btn-primary">
+            注文を確定する
+          </button>
+          <button id="finalCancelBtn" class="btn btn-secondary">
+            キャンセル
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // URLパラメータから商品データを取得
+    function getProductsFromURL() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const productsParam = urlParams.get('products');
+      const action = urlParams.get('action');
+      
+      if (!productsParam) {
+        return { products: [], action: 'select' };
+      }
+      
+      try {
+        const products = JSON.parse(decodeURIComponent(productsParam));
+        return { products, action: action || 'select' };
+      } catch (error) {
+        console.error('商品データの解析エラー:', error);
+        return { products: [], action: 'select' };
+      }
+    }
+
+    // 商品選択ページの表示
+    function displayProductSelection(products) {
+      const statusDiv = document.getElementById('status');
+      const productsDiv = document.getElementById('products');
+      const actionsDiv = document.getElementById('actions');
+      
+      if (products.length === 0) {
+        statusDiv.className = 'status error';
+        statusDiv.innerHTML = '❌ 商品データが見つかりません';
+        return;
+      }
+      
+      statusDiv.className = 'status ready';
+      statusDiv.innerHTML = `✅ ${products.length}件の商品が見つかりました`;
+      
+      // 商品リストの生成
+      productsDiv.innerHTML = '';
+      products.forEach((match, index) => {
+        const product = match.product;
+        const productItem = document.createElement('div');
+        productItem.className = 'product-item';
+        productItem.dataset.index = index;
+        
+        productItem.innerHTML = `
+          <div class="selected-indicator">✓</div>
+          <div class="product-name">${product.productName}</div>
+          <div class="product-details">
+            <div class="product-price">${product.price ? `${product.price.toLocaleString()}円` : '価格不明'}</div>
+            <div class="product-condition ${product.condition}">${product.condition || '状態不明'}</div>
+          </div>
+        `;
+        
+        // クリックイベント
+        productItem.addEventListener('click', () => selectProduct(index));
+        
+        productsDiv.appendChild(productItem);
+      });
+      
+      productsDiv.style.display = 'block';
+      actionsDiv.style.display = 'flex';
+    }
+
+    // 注文確認ページの表示
+    function displayOrderConfirmation() {
+      const statusDiv = document.getElementById('status');
+      const productsDiv = document.getElementById('products');
+      const actionsDiv = document.getElementById('actions');
+      const orderConfirmationDiv = document.getElementById('orderConfirmation');
+      
+      statusDiv.className = 'status ready';
+      statusDiv.innerHTML = '✅ 注文内容確認ページに到達しました';
+      
+      productsDiv.style.display = 'none';
+      actionsDiv.style.display = 'none';
+      orderConfirmationDiv.style.display = 'block';
+    }
+
+    let selectedProductIndex = null;
+    let productsData = [];
+
+    // 商品選択
+    function selectProduct(index) {
+      // 既存の選択を解除
+      document.querySelectorAll('.product-item').forEach(item => {
+        item.classList.remove('selected');
+      });
+      
+      // 新しい選択を適用
+      const selectedItem = document.querySelector(`[data-index="${index}"]`);
+      if (selectedItem) {
+        selectedItem.classList.add('selected');
+        selectedProductIndex = index;
+        document.getElementById('confirmBtn').disabled = false;
+      }
+    }
+
+    // Chrome拡張機能にメッセージを送信
+    function sendMessageToExtension(message) {
+      // Chrome拡張機能との通信（postMessage方式）
+      if (window.opener) {
+        window.opener.postMessage({
+          type: 'KITAMURA_PRODUCT_SELECTION',
+          ...message
+        }, '*');
+      }
+      
+      // 追加: Chrome拡張機能のcontent scriptに直接メッセージ送信を試行
+      try {
+        window.postMessage({
+          type: 'KITAMURA_PRODUCT_SELECTION',
+          source: 'product-selector',
+          ...message
+        }, '*');
+      } catch (error) {
+        console.log('直接メッセージ送信失敗:', error);
+      }
+      
+      // 追加: LocalStorageを使った通信方式
+      try {
+        const messageData = {
+          type: 'KITAMURA_PRODUCT_SELECTION',
+          timestamp: Date.now(),
+          ...message
+        };
+        localStorage.setItem('kitamura_message', JSON.stringify(messageData));
+        
+        // StorageEventを発火させるため、一度削除してから再設定
+        setTimeout(() => {
+          localStorage.removeItem('kitamura_message');
+        }, 1000);
+      } catch (error) {
+        console.log('LocalStorage通信失敗:', error);
+      }
+    }
+
+    // イベントリスナー
+    document.getElementById('confirmBtn').addEventListener('click', () => {
+      if (selectedProductIndex !== null) {
+        const selectedProduct = productsData[selectedProductIndex];
+        
+        sendMessageToExtension({
+          action: 'productSelected',
+          selectedProduct: selectedProduct,
+          selectedIndex: selectedProductIndex
+        });
+        
+        // 確認メッセージ表示
+        const statusDiv = document.getElementById('status');
+        statusDiv.className = 'status ready';
+        statusDiv.innerHTML = '✅ 選択完了！Chrome拡張機能で購入処理を続行しています...';
+        
+        // 3秒後にウィンドウを閉じる
+        setTimeout(() => {
+          if (window.opener) {
+            window.close();
+          } else {
+            // ウィンドウを閉じられない場合は、メッセージを表示
+            statusDiv.innerHTML = '✅ 完了！このページを閉じて、ブラウザで購入処理の続行を確認してください。';
+          }
+        }, 3000);
+      }
+    });
+
+    document.getElementById('cancelBtn').addEventListener('click', () => {
+      sendMessageToExtension({
+        action: 'cancelled'
+      });
+      
+      if (window.opener) {
+        window.close();
+      } else {
+        const statusDiv = document.getElementById('status');
+        statusDiv.className = 'status error';
+        statusDiv.innerHTML = '❌ キャンセルされました';
+      }
+    });
+
+    document.getElementById('finalConfirmBtn').addEventListener('click', () => {
+      sendMessageToExtension({
+        action: 'orderConfirmed'
+      });
+      
+      const statusDiv = document.getElementById('status');
+      statusDiv.className = 'status ready';
+      statusDiv.innerHTML = '✅ 注文確定！Chrome拡張機能で最終処理を実行しています...';
+      
+      setTimeout(() => {
+        if (window.opener) {
+          window.close();
+        } else {
+          statusDiv.innerHTML = '✅ 完了！このページを閉じて、購入完了を確認してください。';
+        }
+      }, 2000);
+    });
+
+    document.getElementById('finalCancelBtn').addEventListener('click', () => {
+      sendMessageToExtension({
+        action: 'orderCancelled'
+      });
+      
+      if (window.opener) {
+        window.close();
+      } else {
+        const statusDiv = document.getElementById('status');
+        statusDiv.className = 'status error';
+        statusDiv.innerHTML = '❌ 注文がキャンセルされました';
+      }
+    });
+
+    // 初期化
+    document.addEventListener('DOMContentLoaded', () => {
+      const { products, action } = getProductsFromURL();
+      productsData = products;
+      
+      if (action === 'confirm') {
+        // 注文確認モード
+        displayOrderConfirmation();
+      } else {
+        // 商品選択モード
+        displayProductSelection(products);
+      }
+    });
+  </script>
+</body>
+</html>
