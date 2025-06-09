@@ -61,7 +61,7 @@
     .test-methods {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 20px;
+      gap: 15px;
       margin: 20px 0;
     }
     
@@ -139,6 +139,18 @@
         <div id="localStorageStatus" class="method-status pending">待機中</div>
         <div id="localStorageData" style="margin-top: 10px; font-size: 12px; color: #666;"></div>
       </div>
+      
+      <div class="method-card">
+        <div class="method-title">🔗 URLパラメータ通信</div>
+        <div id="urlParameterStatus" class="method-status pending">待機中</div>
+        <div id="urlParameterData" style="margin-top: 10px; font-size: 12px; color: #666;"></div>
+      </div>
+      
+      <div class="method-card">
+        <div class="method-title">🌐 外部API通信</div>
+        <div id="externalAPIStatus" class="method-status pending">待機中</div>
+        <div id="externalAPIData" style="margin-top: 10px; font-size: 12px; color: #666;"></div>
+      </div>
     </div>
     
     <div id="receivedData" class="data-display" style="display: none;"></div>
@@ -168,18 +180,71 @@
 
     let receivedMethods = [];
     
+    // データ待機関数
+    function waitForData() {
+      const statusDiv = document.getElementById('status');
+      let attempts = 0;
+      const maxAttempts = 30; // 30秒間リトライ
+      
+      const checkForData = () => {
+        attempts++;
+        
+        // URLパラメータから再試行
+        const { products } = getProductsFromURL();
+        
+        if (products.length > 0) {
+          displayProductSelection(products);
+          return;
+        }
+        
+        if (attempts < maxAttempts) {
+          statusDiv.innerHTML = `<div class="spinner"></div>商品データを待機中... (${attempts}/${maxAttempts})`;
+          setTimeout(checkForData, 1000);
+        } else {
+          statusDiv.className = 'status error';
+          statusDiv.innerHTML = '❌ 商品データの読み込みがタイムアウトしました。ページを更新してください。';
+        }
+      };
+      
+      checkForData();
+    }
+    
     // 受信したデータを表示する関数
     function displayReceivedData(data, method) {
       const receivedDataDiv = document.getElementById('receivedData');
       const mainStatusDiv = document.getElementById('mainStatus');
       
       // メソッド別ステータス更新
-      const methodStatusId = method === 'postMessage' ? 'postMessageStatus' : 'localStorageStatus';
-      const methodDataId = method === 'postMessage' ? 'postMessageData' : 'localStorageData';
+      let methodStatusId, methodDataId;
       
-      document.getElementById(methodStatusId).className = 'method-status success';
-      document.getElementById(methodStatusId).textContent = '受信成功';
-      document.getElementById(methodDataId).textContent = `${new Date().toLocaleTimeString()} に受信`;
+      switch(method) {
+        case 'postMessage':
+          methodStatusId = 'postMessageStatus';
+          methodDataId = 'postMessageData';
+          break;
+        case 'localStorage':
+        case 'localStorage-polling':
+          methodStatusId = 'localStorageStatus';
+          methodDataId = 'localStorageData';
+          break;
+        case 'urlParameter':
+          methodStatusId = 'urlParameterStatus';
+          methodDataId = 'urlParameterData';
+          break;
+        case 'externalAPI':
+          methodStatusId = 'externalAPIStatus';
+          methodDataId = 'externalAPIData';
+          break;
+        default:
+          methodStatusId = null;
+          methodDataId = null;
+      }
+      
+      if (methodStatusId && methodDataId) {
+        document.getElementById(methodStatusId).className = 'method-status success';
+        document.getElementById(methodStatusId).textContent = '受信成功';
+        document.getElementById(methodDataId).textContent = `${new Date().toLocaleTimeString()} に受信`;
+      }
       
       // 受信データを表示
       receivedDataDiv.style.display = 'block';
@@ -249,7 +314,38 @@
         displayReceivedData(data, 'urlParameter');
       } catch (error) {
         console.error('URLパラメータパースエラー:', error);
+        document.getElementById('urlParameterStatus').className = 'method-status failed';
+        document.getElementById('urlParameterStatus').textContent = 'パースエラー';
       }
+    }
+    
+    // 5. 外部API（JSONBin）からの読み込み
+    const apiType = urlParams.get('api');
+    const binId = urlParams.get('binId');
+    if (apiType === 'jsonbin' && binId) {
+      const mainStatusDiv = document.getElementById('mainStatus');
+      mainStatusDiv.innerHTML = '<span class="spinner"></span>外部APIからデータを読み込み中...';
+      
+      document.getElementById('externalAPIStatus').className = 'method-status pending';
+      document.getElementById('externalAPIStatus').textContent = '読み込み中...';
+      
+      fetch(`https://api.jsonbin.io/v3/b/${binId}`)
+        .then(response => response.json())
+        .then(result => {
+          if (result.record) {
+            displayReceivedData(result.record, 'externalAPI');
+          } else {
+            throw new Error('データが見つかりません');
+          }
+        })
+        .catch(error => {
+          console.error('外部API読み込みエラー:', error);
+          mainStatusDiv.className = 'status error';
+          mainStatusDiv.innerHTML = `❌ 外部APIからの読み込みに失敗: ${error.message}`;
+          
+          document.getElementById('externalAPIStatus').className = 'method-status failed';
+          document.getElementById('externalAPIStatus').textContent = 'エラー';
+        });
     }
 
     // 5. タイムアウト処理
@@ -260,14 +356,16 @@
         mainStatusDiv.innerHTML = '❌ 30秒経過してもデータを受信できませんでした';
         
         // 失敗したメソッドにマーク
-        if (!receivedMethods.includes('postMessage')) {
-          document.getElementById('postMessageStatus').className = 'method-status failed';
-          document.getElementById('postMessageStatus').textContent = 'タイムアウト';
-        }
-        if (!receivedMethods.includes('localStorage')) {
-          document.getElementById('localStorageStatus').className = 'method-status failed';
-          document.getElementById('localStorageStatus').textContent = 'タイムアウト';
-        }
+        const methodIds = ['postMessage', 'localStorage', 'urlParameter', 'externalAPI'];
+        methodIds.forEach(methodId => {
+          if (!receivedMethods.includes(methodId)) {
+            const statusElement = document.getElementById(`${methodId}Status`);
+            if (statusElement) {
+              statusElement.className = 'method-status failed';
+              statusElement.textContent = 'タイムアウト';
+            }
+          }
+        });
       }
     }, 30000);
 
